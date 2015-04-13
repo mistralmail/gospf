@@ -37,26 +37,24 @@ func TestIsSupportedProtocol(t *testing.T) {
 }
 
 func TestLiveDomains(t *testing.T) {
-	
+
 	if testing.Short() {
 		t.Skip("skipping test to avoid external network")
 	}
-	
+
 	Convey("Testing live domains", t, func() {
-	
+
 		domains := []string{
 			"google.com",
 			"hotmail.com",
 			"yahoo.com",
 		}
-	
+
 		for _, domain := range domains {
 			_, err := GetSPFRecord(domain)
 			So(err, ShouldEqual, nil)
 		}
-	
+
 	})
-	
+
 }
-
-
