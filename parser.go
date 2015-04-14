@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "fmt"
 	"errors"
 	"strings"
 )
@@ -119,9 +120,14 @@ RFC 4408: (grammar for SPF record)
 	IP6              = "ip6"      ":" ip6-network   [ ip6-cidr-length ]
 	exists           = "exists"   ":" domain-spec
 */
-type directive struct {
+type Directive struct {
 	term string
+	Qualifier string
+	Mechanism string
+	Arguments []string // everything after ':'
 }
+
+type Directives []Directive
 
 func isQualifier(char uint8) bool {
 	qualifiers := []uint8{
@@ -140,7 +146,9 @@ func isQualifier(char uint8) bool {
 	return false
 }
 
-func (d *directive) getQualifier() string {
+
+// Get the qualifier (i.e. +,?,~,-)
+func (d *Directive) getQualifier() string {
 	if isQualifier(d.term[0]) {
 		return string(d.term[0])
 	} else {
@@ -148,7 +156,9 @@ func (d *directive) getQualifier() string {
 	}
 }
 
-func (d *directive) getMechanism() string {
+
+// Get the mechanism (i.e. mx, a, all, ip4, ...)
+func (d *Directive) getMechanism() string {
 	term := d.term
 	if isQualifier(d.term[0]) {
 		term = term[1:len(term)]
@@ -160,13 +170,59 @@ func (d *directive) getMechanism() string {
 	return term[0:index]
 }
 
+
+// Get the arguments (i.e. domain-spec, ip4-network, ip6-network, dual-cidr-length, ip4-cidr-length, ip6-cidr-length)
+func (d *Directive) getArguments() []string {
+	// this implementation is ugly, but it works
+	index := strings.Index(d.term, ":")
+	arguments_str := ""
+	if index == -1 {
+		arguments_str = d.term
+	} else {
+		arguments_str = d.term[index+1:len(d.term)]
+	}
+	index = strings.Index(arguments_str, "/")
+	if index == -1 {
+		return []string{}
+	}
+	if len(arguments_str) <= index {
+		return []string{}
+	}
+	if arguments_str[index:index+2] != "//" {
+		arguments_str = arguments_str[index+1:len(arguments_str)]
+		return append([]string{}, strings.Split(arguments_str, "//")...)
+	} else {
+		arguments_str = arguments_str[index+2:len(arguments_str)]
+		return append([]string{""}, strings.Split(arguments_str, "//")...)
+	}
+}
+
+
+func (directives Directives) process() Directives {
+	
+	for _,d := range directives {
+		d.Qualifier = d.getQualifier()
+		d.Mechanism = d.getMechanism()
+		d.Arguments = d.getArguments()
+	}
+	
+	return directives
+	
+}
+
+
 /*
+RFC 7208 and 4408:
+
+	Modifiers are name/value pairs that provide additional information.
+	Modifiers always have an "=" separating the name and the value.
+
 	modifier         = redirect / explanation / unknown-modifier
 	redirect         = "redirect" "=" domain-spec
 	explanation      = "exp" "=" domain-spec
 	unknown-modifier = name "=" macro-string
 */
-type modifier struct {
+type Modifier struct {
 	term string
 }
 
@@ -178,7 +234,11 @@ func isModifier(term string) bool {
 	}
 }
 
-func getTerms(record string) ([]directive, []modifier, error) {
+func getTerms(record string) ([]Directive, []Modifier, error) {
+	
+	// As per the definition of the ABNF notation in RFC 5234, names are case insensitive
+	record = strings.ToLower(record)
+	
 	version := "v=spf1"
 	terms := strings.Split(record, " ")
 
@@ -186,14 +246,14 @@ func getTerms(record string) ([]directive, []modifier, error) {
 		return nil, nil, errors.New("Unsupported SPF version: " + terms[0])
 	}
 
-	directives := make([]directive, 0)
-	modifiers := make([]modifier, 0)
+	directives := make([]Directive, 0)
+	modifiers := make([]Modifier, 0)
 
 	for _, term := range terms[1:len(terms)] {
 		if isModifier(term) {
-			modifiers = append(modifiers, modifier{term: term})
+			modifiers = append(modifiers, Modifier{term: term})
 		} else {
-			directives = append(directives, directive{term: term})
+			directives = append(directives, Directive{term: term})
 		}
 	}
 
