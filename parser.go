@@ -1,8 +1,8 @@
 package main
 
 import (
-	_ "fmt"
 	"errors"
+	_ "fmt"
 	"strings"
 )
 
@@ -121,7 +121,7 @@ RFC 4408: (grammar for SPF record)
 	exists           = "exists"   ":" domain-spec
 */
 type Directive struct {
-	term string
+	term      string
 	Qualifier string
 	Mechanism string
 	Arguments []string // everything after ':'
@@ -146,7 +146,6 @@ func isQualifier(char uint8) bool {
 	return false
 }
 
-
 // Get the qualifier (i.e. +,?,~,-)
 func (d *Directive) getQualifier() string {
 	if isQualifier(d.term[0]) {
@@ -155,7 +154,6 @@ func (d *Directive) getQualifier() string {
 		return ""
 	}
 }
-
 
 // Get the mechanism (i.e. mx, a, all, ip4, ...)
 func (d *Directive) getMechanism() string {
@@ -170,7 +168,6 @@ func (d *Directive) getMechanism() string {
 	return term[0:index]
 }
 
-
 // Get the arguments (i.e. domain-spec, ip4-network, ip6-network, dual-cidr-length, ip4-cidr-length, ip6-cidr-length)
 func (d *Directive) getArguments() []string {
 	// this implementation is ugly, but it works
@@ -179,7 +176,7 @@ func (d *Directive) getArguments() []string {
 	if index == -1 {
 		arguments_str = d.term
 	} else {
-		arguments_str = d.term[index+1:len(d.term)]
+		arguments_str = d.term[index+1 : len(d.term)]
 	}
 	index = strings.Index(arguments_str, "/")
 	if index == -1 {
@@ -189,27 +186,25 @@ func (d *Directive) getArguments() []string {
 		return []string{}
 	}
 	if arguments_str[index:index+2] != "//" {
-		arguments_str = arguments_str[index+1:len(arguments_str)]
+		arguments_str = arguments_str[index+1 : len(arguments_str)]
 		return append([]string{}, strings.Split(arguments_str, "//")...)
 	} else {
-		arguments_str = arguments_str[index+2:len(arguments_str)]
+		arguments_str = arguments_str[index+2 : len(arguments_str)]
 		return append([]string{""}, strings.Split(arguments_str, "//")...)
 	}
 }
 
-
 func (directives Directives) process() Directives {
-	
-	for _,d := range directives {
+
+	for _, d := range directives {
 		d.Qualifier = d.getQualifier()
 		d.Mechanism = d.getMechanism()
 		d.Arguments = d.getArguments()
 	}
-	
-	return directives
-	
-}
 
+	return directives
+
+}
 
 /*
 RFC 7208 and 4408:
@@ -235,10 +230,10 @@ func isModifier(term string) bool {
 }
 
 func getTerms(record string) ([]Directive, []Modifier, error) {
-	
+
 	// As per the definition of the ABNF notation in RFC 5234, names are case insensitive
 	record = strings.ToLower(record)
-	
+
 	version := "v=spf1"
 	terms := strings.Split(record, " ")
 

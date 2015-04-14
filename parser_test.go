@@ -121,46 +121,43 @@ func TestDirective(t *testing.T) {
 		}
 
 	})
-	
-	
+
 	Convey("Testing directive.getArguments()", t, func() {
-	
+
 		terms := []struct {
-			d Directive
+			d    Directive
 			args []string
 		}{
 			{
-				d: Directive{term: "ip4:192.0.2.0/24"},
+				d:    Directive{term: "ip4:192.0.2.0/24"},
 				args: []string{"24"},
 			},
 			{
-				d: Directive{term: "ip6:1080::8:800:68.0.3.1/96"},
+				d:    Directive{term: "ip6:1080::8:800:68.0.3.1/96"},
 				args: []string{"96"},
 			},
 			{
-				d: Directive{term: "a/32"},
+				d:    Directive{term: "a/32"},
 				args: []string{"32"},
 			},
 			{
-				d: Directive{term: "a/24//96"},
+				d:    Directive{term: "a/24//96"},
 				args: []string{"24", "96"},
 			},
 			{
-				d: Directive{term: "mx:foo.com//126"},
+				d:    Directive{term: "mx:foo.com//126"},
 				args: []string{"", "126"},
 			},
 			{
-				d: Directive{term: "mx:foo.com/32"},
+				d:    Directive{term: "mx:foo.com/32"},
 				args: []string{"32"},
 			},
-
-
 		}
-		
+
 		for _, term := range terms {
 			So(term.d.getArguments(), ShouldResemble, term.args)
 		}
-	
+
 	})
 
 }
