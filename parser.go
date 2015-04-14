@@ -221,6 +221,8 @@ type Modifier struct {
 	term string
 }
 
+type Modifiers []Modifier
+
 func isModifier(term string) bool {
 	if strings.Index(term, "=") != -1 {
 		return true

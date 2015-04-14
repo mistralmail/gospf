@@ -6,6 +6,13 @@ import (
 	"net"
 )
 
+type DnsResolver interface {
+	GetSPFRecord(string) (string, error)
+}
+
+type GoSPFDNS struct {
+}
+
 func IsSPF(record string) bool {
 
 	if record[0:5] == "v=spf" {
@@ -26,7 +33,7 @@ func IsSupportedProtocol(record string) bool {
 
 }
 
-func GetSPFRecord(name string) (string, error) {
+func (dns *GoSPFDNS) GetSPFRecord(name string) (string, error) {
 
 	records, err := net.LookupTXT(name)
 	if err != nil {

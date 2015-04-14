@@ -6,6 +6,7 @@ import (
 
 func main() {
 
+	dns := dns.GoSPFDNS{}
 	dns.GetSPFRecord("uantwerpen.be")
 
 }
