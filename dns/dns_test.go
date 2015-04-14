@@ -51,7 +51,8 @@ func TestLiveDomains(t *testing.T) {
 		}
 
 		for _, domain := range domains {
-			_, err := GetSPFRecord(domain)
+			dns := GoSPFDNS{}
+			_, err := dns.GetSPFRecord(domain)
 			So(err, ShouldEqual, nil)
 		}
 
