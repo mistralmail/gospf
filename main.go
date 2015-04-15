@@ -24,12 +24,6 @@ func main() {
 		return
 	}
 
-	err = spf.handleDirectives()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
 	fmt.Print(spf)
 
 }

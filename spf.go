@@ -16,6 +16,7 @@ type SPF struct {
 	Fail     []net.IPNet // IP's that fail
 	All      string      // qualifier of 'all' directive
 	Domain   string
+	Includes []*SPF // Processed SPF object of include mechanism
 
 	dns        dns.DnsResolver
 	directives Directives
@@ -23,30 +24,7 @@ type SPF struct {
 }
 
 func (spf SPF) String() string {
-	out := "{\n"
-	out += "  Domain:   " + spf.Domain + "\n"
-	out += "  Pass:     " + fmt.Sprint(spf.Pass) + "\n"
-	out += "  Neutral:  " + fmt.Sprint(spf.Neutral) + "\n"
-	out += "  SoftFail: " + fmt.Sprint(spf.SoftFail) + "\n"
-	out += "  Fail:     " + fmt.Sprint(spf.Fail) + "\n"
-	out += "  All:      "
-	out += func() string {
-		switch spf.All {
-		case "+":
-			return "Pass"
-		case "?":
-			return "Neutral"
-		case "~":
-			return "SoftFail"
-		case "-":
-			return "Fail"
-		default:
-			return ""
-		}
-	}()
-	out += "\n"
-	out += "}\n"
-	return out
+	return spf.toString("")
 }
 
 // NewSPF creates a new SPF instance
@@ -59,6 +37,7 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 		SoftFail: make([]net.IPNet, 0),
 		Fail:     make([]net.IPNet, 0),
 		Domain:   domain,
+		Includes: make([]*SPF, 0),
 	}
 
 	spf.dns = dns_resolver
@@ -74,6 +53,8 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 	spf.directives = Directives(directives)
 	spf.directives = spf.directives.process()
 	spf.modifiers = Modifiers(modifiers)
+
+	spf.handleDirectives()
 
 	return &spf, nil
 }
@@ -145,6 +126,14 @@ func (spf *SPF) handleDirectives() error {
 						The "include" mechanism triggers a recursive evaluation of
 						check_host().
 				*/
+				if _, ok := directive.Arguments["domain"]; !ok {
+					return errors.New("No domain given for include mechanism")
+				}
+				include_spf, err := NewSPF(directive.Arguments["domain"], spf.dns)
+				if err != nil {
+					return err
+				}
+				spf.Includes = append(spf.Includes, include_spf)
 			}
 		case "a":
 			{
@@ -380,4 +369,42 @@ CheckIP checks if the given IP is a valid sender
 */
 func (spf *SPF) CheckIP(net.IP) string {
 	return "None"
+}
+
+func (spf SPF) toString(prefix string) string {
+
+	out := prefix + "{\n"
+	out += prefix + "  Domain:   " + spf.Domain + "\n"
+	out += prefix + "  Pass:     " + fmt.Sprint(spf.Pass) + "\n"
+	out += prefix + "  Neutral:  " + fmt.Sprint(spf.Neutral) + "\n"
+	out += prefix + "  SoftFail: " + fmt.Sprint(spf.SoftFail) + "\n"
+	out += prefix + "  Fail:     " + fmt.Sprint(spf.Fail) + "\n"
+	out += prefix + "  All:      "
+	out += func() string {
+		switch spf.All {
+		case "+":
+			return "Pass"
+		case "?":
+			return "Neutral"
+		case "~":
+			return "SoftFail"
+		case "-":
+			return "Fail"
+		default:
+			return ""
+		}
+	}()
+	out += "\n"
+	out += prefix + "  Includes: "
+	out += func() string {
+		out := ""
+		for _, i := range spf.Includes {
+			out += i.toString(prefix + "    ")
+		}
+		return out
+	}()
+	out += prefix + "\n"
+	out += prefix + "}\n"
+	return out
+
 }
