@@ -57,7 +57,7 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 		return nil, err
 	}
 	spf.directives = Directives(directives)
-	spf.directives = spf.directives.process()
+	spf.directives.process()
 	spf.modifiers = Modifiers(modifiers)
 
 	spf.handleDirectives()

@@ -245,11 +245,11 @@ func (d *Directive) getArguments() map[string]string {
 	return arguments
 }
 
-func (directives Directives) process() Directives {
+func (directives *Directives) process() *Directives {
 
 	out := make(Directives, 0)
 
-	for _, d := range directives {
+	for _, d := range *directives {
 		d.Qualifier = d.getQualifier()
 		d.Mechanism = d.getMechanism()
 		d.Arguments = d.getArguments()
@@ -257,7 +257,7 @@ func (directives Directives) process() Directives {
 		out = append(out, d)
 	}
 
-	directives = out
+	*directives = out
 
 	return directives
 
