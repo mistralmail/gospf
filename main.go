@@ -10,9 +10,10 @@ import (
 func main() {
 
 	fmt.Println("\nGoSPF")
-	fmt.Println("-----")
+	fmt.Println("-----\n")
 
-	if len(os.Args) < 2 {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: " + os.Args[0] + " domain ip [debug]")
 		return
 	}
 
@@ -24,6 +25,18 @@ func main() {
 		return
 	}
 
-	fmt.Print(spf)
+	if len(os.Args) >= 4 && os.Args[3] == "debug" {
+		fmt.Print(spf)
+		fmt.Println("\n-----\n")
+	}
+
+	ip := os.Args[2]
+	check, err := spf.CheckIP(ip)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(ip, "->", check, "\n")
 
 }

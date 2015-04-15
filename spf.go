@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+type include struct {
+	qualifier string
+	spf       *SPF
+}
+
 type SPF struct {
 	Pass     []net.IPNet // IPs that pass
 	Neutral  []net.IPNet // IPs that are neutral
@@ -16,7 +21,7 @@ type SPF struct {
 	Fail     []net.IPNet // IP's that fail
 	All      string      // qualifier of 'all' directive
 	Domain   string
-	Includes []*SPF // Processed SPF object of include mechanism
+	Includes []include // Processed SPF object of include mechanism
 
 	dns        dns.DnsResolver
 	directives Directives
@@ -37,7 +42,8 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 		SoftFail: make([]net.IPNet, 0),
 		Fail:     make([]net.IPNet, 0),
 		Domain:   domain,
-		Includes: make([]*SPF, 0),
+		Includes: make([]include, 0),
+		All:      "undifined",
 	}
 
 	spf.dns = dns_resolver
@@ -115,7 +121,6 @@ func (spf *SPF) handleDirectives() error {
 					ignored when there is an "all" mechanism in the record, regardless of
 					the relative ordering of the terms.
 				*/
-				break
 			}
 		case "include":
 			{
@@ -133,7 +138,7 @@ func (spf *SPF) handleDirectives() error {
 				if err != nil {
 					return err
 				}
-				spf.Includes = append(spf.Includes, include_spf)
+				spf.Includes = append(spf.Includes, include{qualifier: directive.Qualifier, spf: include_spf})
 			}
 		case "a":
 			{
@@ -367,8 +372,99 @@ CheckIP checks if the given IP is a valid sender
 	   be correctly interpreted.  This signals an error condition that
 	   definitely requires DNS operator intervention to be resolved.
 */
-func (spf *SPF) CheckIP(net.IP) string {
-	return "None"
+func (spf *SPF) CheckIP(ip_str string) (string, error) {
+	ip := net.ParseIP(ip_str)
+	for _, ip_net := range spf.Fail {
+		if ip_net.Contains(ip) {
+			return "Fail", nil
+		}
+	}
+	for _, ip_net := range spf.SoftFail {
+		if ip_net.Contains(ip) {
+			return "Softfail", nil
+		}
+	}
+	for _, ip_net := range spf.Neutral {
+		if ip_net.Contains(ip) {
+			return "Neutral", nil
+		}
+	}
+	for _, ip_net := range spf.Pass {
+		if ip_net.Contains(ip) {
+			return "Pass", nil
+		}
+	}
+
+	for _, include := range spf.Includes {
+		/*
+			RFC 7208 5.2
+				The "include" mechanism triggers a recursive evaluation of
+				check_host().
+
+				1.  The <domain-spec> is expanded as per Section 7.
+
+				2.  check_host() is evaluated with the resulting string as the
+					<domain>.  The <ip> and <sender> arguments remain the same as in
+					the current evaluation of check_host().
+
+				3.  The recursive evaluation returns match, not-match, or an error.
+
+				4.  If it returns match, then the appropriate result for the
+					"include" mechanism is used (e.g., include or +include produces a
+					"pass" result and -include produces "fail").
+
+				5.  If it returns not-match or an error, the parent check_host()
+					resumes processing as per the table below, with the previous
+					value of <domain> restored.
+
+				+---------------------------------+---------------------------------+
+				| A recursive check_host() result | Causes the "include" mechanism  |
+				| of:                             | to:                             |
+				+---------------------------------+---------------------------------+
+				| pass                            | match                           |
+				|                                 |                                 |
+				| fail                            | not match                       |
+				|                                 |                                 |
+				| softfail                        | not match                       |
+				|                                 |                                 |
+				| neutral                         | not match                       |
+				|                                 |                                 |
+				| temperror                       | return temperror                |
+				|                                 |                                 |
+				| permerror                       | return permerror                |
+				|                                 |                                 |
+				| none                            | return permerror                |
+				+---------------------------------+---------------------------------+
+		*/
+		check, err := include.spf.CheckIP(ip_str)
+		if err != nil {
+			return "", nil
+		}
+		if check == "Pass" {
+			return qualifierToResult(include.qualifier), nil
+		}
+	}
+
+	// No results found -> check all
+	if spf.All != "undefined" {
+		return qualifierToResult(spf.All), nil
+	}
+
+	return "None", nil
+}
+
+func qualifierToResult(qualifier string) string {
+	switch qualifier {
+	case "+", "":
+		return "Pass"
+	case "?":
+		return "Neutral"
+	case "~":
+		return "Softfail"
+	case "-":
+		return "Fail"
+	}
+	return ""
 }
 
 func (spf SPF) toString(prefix string) string {
@@ -399,7 +495,8 @@ func (spf SPF) toString(prefix string) string {
 	out += func() string {
 		out := ""
 		for _, i := range spf.Includes {
-			out += i.toString(prefix + "    ")
+			out += i.qualifier
+			out += i.spf.toString(prefix + "    ")
 		}
 		return out
 	}()
