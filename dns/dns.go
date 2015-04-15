@@ -9,6 +9,7 @@ import (
 type DnsResolver interface {
 	GetSPFRecord(string) (string, error)
 	GetARecords(string) ([]string, error)
+	GetMXRecords(string) ([]*net.MX, error)
 }
 
 type GoSPFDNS struct {
@@ -36,6 +37,10 @@ func IsSupportedProtocol(record string) bool {
 
 func (dns *GoSPFDNS) GetARecords(name string) ([]string, error) {
 	return net.LookupHost(name)
+}
+
+func (dns *GoSPFDNS) GetMXRecords(name string) ([]*net.MX, error) {
+	return net.LookupMX(name)
 }
 
 func (dns *GoSPFDNS) GetSPFRecord(name string) (string, error) {

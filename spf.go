@@ -180,7 +180,39 @@ func (spf *SPF) handleDirectives() error {
 						Note regarding implicit MXes: If the <target-name> has no MX record,
 						check_host() MUST NOT apply the implicit MX rules of [RFC5321] by
 						querying for an A or AAAA record for the same name.
+
+					RFC 1035 3.3.9.
+						PREFERENCE      A 16 bit integer which specifies the preference given to
+										this RR among others at the same owner.  Lower values
+										are preferred.
+
+						EXCHANGE        A <domain-name> which specifies a host willing to act as
+										a mail exchange for the owner name.
 				*/
+				domain := spf.Domain
+				if d, ok := directive.Arguments["domain"]; ok && d != "" {
+					domain = d
+				}
+				// Get mx records
+				mxRecords, err := spf.dns.GetMXRecords(domain)
+				if err != nil {
+					return err
+				}
+				// Get A/AAAA records of MX hosts and process them
+				for _, mx := range mxRecords {
+
+					ips, err := spf.dns.GetARecords(mx.Host)
+					if err != nil {
+						return err
+					}
+					ip_nets, err := GetRanges(ips, directive.Arguments["ip4-cidr"], directive.Arguments["ip6-cidr"])
+					if err != nil {
+						return err
+					}
+					spf.handleIPNets(ip_nets, directive.Qualifier)
+
+				}
+
 			}
 		case "ptr":
 			{
