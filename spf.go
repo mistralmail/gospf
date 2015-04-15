@@ -15,14 +15,14 @@ type include struct {
 }
 
 type SPF struct {
-	Pass      []net.IPNet // IPs that pass
-	Neutral   []net.IPNet // IPs that are neutral
-	SoftFail  []net.IPNet // IP's that fail weakly
-	Fail      []net.IPNet // IP's that fail
-	All       string      // qualifier of 'all' directive
-	Domain    string
-	Includes  []include // Processed SPF object of include mechanism
-	Redirects []*SPF    // Processed SPF object of include mechanism
+	Pass     []net.IPNet // IPs that pass
+	Neutral  []net.IPNet // IPs that are neutral
+	SoftFail []net.IPNet // IP's that fail weakly
+	Fail     []net.IPNet // IP's that fail
+	All      string      // qualifier of 'all' directive
+	Domain   string
+	Includes []include // Processed SPF object of include mechanism
+	Redirect *SPF      // Processed SPF object of include mechanism
 
 	dns        dns.DnsResolver
 	directives Directives
@@ -38,14 +38,14 @@ func (spf SPF) String() string {
 // (so no more DNS lookups must be done after constructing the instance)
 func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 	spf := SPF{
-		Pass:      make([]net.IPNet, 0),
-		Neutral:   make([]net.IPNet, 0),
-		SoftFail:  make([]net.IPNet, 0),
-		Fail:      make([]net.IPNet, 0),
-		Domain:    domain,
-		Includes:  make([]include, 0),
-		Redirects: make([]*SPF, 0),
-		All:       "undifined",
+		Pass:     make([]net.IPNet, 0),
+		Neutral:  make([]net.IPNet, 0),
+		SoftFail: make([]net.IPNet, 0),
+		Fail:     make([]net.IPNet, 0),
+		Domain:   domain,
+		Includes: make([]include, 0),
+		Redirect: nil,
+		All:      "undefined",
 	}
 
 	spf.dns = dns_resolver
@@ -331,6 +331,9 @@ func (spf *SPF) handleModifiers() error {
 
 					NOTE: Macros are not implemented
 				*/
+				if spf.Redirect != nil {
+					return errors.New("Duplicate redirect modifier")
+				}
 				if modifier.Value == "" {
 					return errors.New("No domain given for redirect modifier")
 				}
@@ -338,7 +341,7 @@ func (spf *SPF) handleModifiers() error {
 				if err != nil {
 					return err
 				}
-				spf.Redirects = append(spf.Redirects, redirect_spf)
+				spf.Redirect = redirect_spf
 
 			}
 
@@ -539,9 +542,10 @@ func (spf *SPF) CheckIP(ip_str string) (string, error) {
 			term in a record.  Any "redirect" modifier MUST be ignored if there
 			is an "all" mechanism anywhere in the record.
 	*/
-	for _, redirect := range spf.Redirects {
-		// TODO limit to 1 redirect modifier per SPF record!
-		return redirect.CheckIP(ip_str)
+	if spf.All == "undefined" {
+		if spf.Redirect != nil {
+			return spf.Redirect.CheckIP(ip_str)
+		}
 	}
 
 	// No results found -> check all
@@ -600,13 +604,12 @@ func (spf SPF) toString(prefix string) string {
 		return out
 	}()
 	out += "\n"
-	out += prefix + "  Redirects: "
+	out += prefix + "  Redirect: "
 	out += func() string {
-		out := ""
-		for _, i := range spf.Redirects {
-			out += i.toString(prefix + "    ")
+		if spf.Redirect != nil {
+			return spf.Redirect.toString(prefix + "    ")
 		}
-		return out
+		return ""
 	}()
 	out += prefix + "\n"
 	out += prefix + "}\n"
