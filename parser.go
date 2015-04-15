@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	_ "fmt"
+	"net"
 	"strings"
 )
 
@@ -124,7 +125,7 @@ type Directive struct {
 	term      string
 	Qualifier string
 	Mechanism string
-	Arguments []string // everything after ':'
+	Arguments map[string]string // everything after ':'
 }
 
 type Directives []Directive
@@ -169,29 +170,69 @@ func (d *Directive) getMechanism() string {
 }
 
 // Get the arguments (i.e. domain-spec, ip4-network, ip6-network, dual-cidr-length, ip4-cidr-length, ip6-cidr-length)
-func (d *Directive) getArguments() []string {
-	// this implementation is ugly, but it works
-	index := strings.Index(d.term, ":")
-	arguments_str := ""
+// See 'TestDirective -> directive.getArguments()' for possible return values
+func (d *Directive) getArguments() map[string]string {
+	arguments := make(map[string]string)
+	index := -1
+	ip := false
+
+	term := d.term
+	index = strings.Index(term, ":")
+	if index != -1 {
+		// "a"      [ ":" domain-spec ]
+		// "ip4"      ":" ip4-network
+		// ...
+		term := term[index+1 : len(term)]
+		spec := ""
+		index = strings.Index(term, "/")
+		if index == -1 {
+			spec = term
+		} else {
+			spec = term[0:index]
+			term = term[index+1 : len(term)]
+		}
+		if net.ParseIP(spec) != nil {
+			arguments["ip"] = spec
+			ip = true
+		} else {
+			arguments["domain"] = spec
+		}
+	}
+
+	index = strings.Index(term, "/")
 	if index == -1 {
-		arguments_str = d.term
+		arguments["ip4-cidr"] = ""
+		arguments["ip6-cidr"] = ""
+		return arguments
+	}
+	if term[index:index+2] != "//" {
+		term = term[index+1 : len(term)]
 	} else {
-		arguments_str = d.term[index+1 : len(d.term)]
+		term = term[index:len(term)]
 	}
-	index = strings.Index(arguments_str, "/")
-	if index == -1 {
-		return []string{}
-	}
-	if len(arguments_str) <= index {
-		return []string{}
-	}
-	if arguments_str[index:index+2] != "//" {
-		arguments_str = arguments_str[index+1 : len(arguments_str)]
-		return append([]string{}, strings.Split(arguments_str, "//")...)
+
+	cidrs := strings.Split(term, "//")
+	if ip {
+		if !strings.Contains(arguments["ip"], ":") {
+			arguments["ip4-cidr"] = cidrs[0]
+		} else {
+			arguments["ip6-cidr"] = cidrs[0]
+		}
+
 	} else {
-		arguments_str = arguments_str[index+2 : len(arguments_str)]
-		return append([]string{""}, strings.Split(arguments_str, "//")...)
+		if len(cidrs) == 2 {
+			// ip4-cidr + "/" + ip6-cidr
+			arguments["ip4-cidr"] = cidrs[0]
+			arguments["ip6-cidr"] = cidrs[1]
+		}
+		if len(cidrs) == 1 {
+			// ip4
+			arguments["ip4-cidr"] = cidrs[0]
+			arguments["ip6-cidr"] = ""
+		}
 	}
+
+	return arguments
 }
 
 func (directives Directives) process() Directives {

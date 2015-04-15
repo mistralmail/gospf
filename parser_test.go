@@ -126,31 +126,35 @@ func TestDirective(t *testing.T) {
 
 		terms := []struct {
 			d    Directive
-			args []string
+			args map[string]string
 		}{
 			{
 				d:    Directive{term: "ip4:192.0.2.0/24"},
-				args: []string{"24"},
+				args: map[string]string{"ip": "192.0.2.0", "ip4-cidr": "24"},
 			},
 			{
 				d:    Directive{term: "ip6:1080::8:800:68.0.3.1/96"},
-				args: []string{"96"},
+				args: map[string]string{"ip": "1080::8:800:68.0.3.1", "ip6-cidr": "96"},
 			},
 			{
 				d:    Directive{term: "a/32"},
-				args: []string{"32"},
+				args: map[string]string{"ip4-cidr": "32", "ip6-cidr": ""},
 			},
 			{
 				d:    Directive{term: "a/24//96"},
-				args: []string{"24", "96"},
+				args: map[string]string{"ip4-cidr": "24", "ip6-cidr": "96"},
 			},
 			{
 				d:    Directive{term: "mx:foo.com//126"},
-				args: []string{"", "126"},
+				args: map[string]string{"domain": "foo.com", "ip4-cidr": "", "ip6-cidr": "126"},
 			},
 			{
 				d:    Directive{term: "mx:foo.com/32"},
-				args: []string{"32"},
+				args: map[string]string{"domain": "foo.com", "ip4-cidr": "32", "ip6-cidr": ""},
+			},
+			{
+				d:    Directive{term: "mx:foo.com"},
+				args: map[string]string{"domain": "foo.com", "ip4-cidr": "", "ip6-cidr": ""},
 			},
 		}
 
