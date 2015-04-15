@@ -50,7 +50,7 @@ func TestGetTerms(t *testing.T) {
 
 func TestDirective(t *testing.T) {
 
-	Convey("Testing directive.getQualifier()", t, func() {
+	Convey("Testing Directive.getQualifier()", t, func() {
 
 		terms := []struct {
 			d Directive
@@ -84,7 +84,7 @@ func TestDirective(t *testing.T) {
 
 	})
 
-	Convey("Testing directive.getMechanism()", t, func() {
+	Convey("Testing Directive.getMechanism()", t, func() {
 
 		terms := []struct {
 			d Directive
@@ -126,7 +126,7 @@ func TestDirective(t *testing.T) {
 
 	})
 
-	Convey("Testing directive.getArguments()", t, func() {
+	Convey("Testing Directive.getArguments()", t, func() {
 
 		terms := []struct {
 			d    Directive
@@ -164,6 +164,42 @@ func TestDirective(t *testing.T) {
 
 		for _, term := range terms {
 			So(term.d.getArguments(), ShouldResemble, term.args)
+		}
+
+	})
+
+}
+
+func TestModifiers(t *testing.T) {
+
+	Convey("Testing Modifiers.process()", t, func() {
+
+		modifiers := []struct {
+			m Modifiers
+			k string
+			v string
+		}{
+			{
+				m: Modifiers{Modifier{term: "redirect=_spf.example.com"}},
+				k: "redirect",
+				v: "_spf.example.com",
+			},
+			{
+				m: Modifiers{Modifier{term: "redirect="}},
+				k: "redirect",
+				v: "",
+			},
+			{
+				m: Modifiers{Modifier{term: "exp=explain._spf.%{d}"}},
+				k: "exp",
+				v: "explain._spf.%{d}",
+			},
+		}
+
+		for _, modifier := range modifiers {
+			modifier.m.process()
+			So(modifier.m[0].Key, ShouldEqual, modifier.k)
+			So(modifier.m[0].Value, ShouldEqual, modifier.v)
 		}
 
 	})

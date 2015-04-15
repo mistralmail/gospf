@@ -275,7 +275,9 @@ RFC 7208 and 4408:
 	unknown-modifier = name "=" macro-string
 */
 type Modifier struct {
-	term string
+	term  string
+	Key   string
+	Value string
 }
 
 type Modifiers []Modifier
@@ -286,6 +288,27 @@ func isModifier(term string) bool {
 	} else {
 		return false
 	}
+}
+
+func (modifiers *Modifiers) process() *Modifiers {
+	out := make(Modifiers, 0)
+
+	for _, m := range *modifiers {
+
+		index := strings.Index(m.term, "=")
+		m.Key = m.term[0:index]
+		if index >= len(m.term) {
+			m.Value = ""
+		} else {
+			m.Value = m.term[index+1 : len(m.term)]
+		}
+
+		out = append(out, m)
+	}
+
+	*modifiers = out
+
+	return modifiers
 }
 
 func getTerms(record string) ([]Directive, []Modifier, error) {
