@@ -15,13 +15,14 @@ type include struct {
 }
 
 type SPF struct {
-	Pass     []net.IPNet // IPs that pass
-	Neutral  []net.IPNet // IPs that are neutral
-	SoftFail []net.IPNet // IP's that fail weakly
-	Fail     []net.IPNet // IP's that fail
-	All      string      // qualifier of 'all' directive
-	Domain   string
-	Includes []include // Processed SPF object of include mechanism
+	Pass      []net.IPNet // IPs that pass
+	Neutral   []net.IPNet // IPs that are neutral
+	SoftFail  []net.IPNet // IP's that fail weakly
+	Fail      []net.IPNet // IP's that fail
+	All       string      // qualifier of 'all' directive
+	Domain    string
+	Includes  []include // Processed SPF object of include mechanism
+	Redirects []*SPF    // Processed SPF object of include mechanism
 
 	dns        dns.DnsResolver
 	directives Directives
@@ -37,13 +38,14 @@ func (spf SPF) String() string {
 // (so no more DNS lookups must be done after constructing the instance)
 func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 	spf := SPF{
-		Pass:     make([]net.IPNet, 0),
-		Neutral:  make([]net.IPNet, 0),
-		SoftFail: make([]net.IPNet, 0),
-		Fail:     make([]net.IPNet, 0),
-		Domain:   domain,
-		Includes: make([]include, 0),
-		All:      "undifined",
+		Pass:      make([]net.IPNet, 0),
+		Neutral:   make([]net.IPNet, 0),
+		SoftFail:  make([]net.IPNet, 0),
+		Fail:      make([]net.IPNet, 0),
+		Domain:    domain,
+		Includes:  make([]include, 0),
+		Redirects: make([]*SPF, 0),
+		All:       "undifined",
 	}
 
 	spf.dns = dns_resolver
@@ -59,8 +61,16 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 	spf.directives = Directives(directives)
 	spf.directives.process()
 	spf.modifiers = Modifiers(modifiers)
+	spf.modifiers.process()
 
-	spf.handleDirectives()
+	err = spf.handleDirectives()
+	if err != nil {
+		return nil, err
+	}
+	err = spf.handleModifiers()
+	if err != nil {
+		return nil, err
+	}
 
 	return &spf, nil
 }
@@ -286,6 +296,80 @@ func (spf *SPF) handleDirectives() error {
 
 }
 
+func (spf *SPF) handleModifiers() error {
+
+	for _, modifier := range spf.modifiers {
+
+		switch modifier.Key {
+		case "redirect":
+			{
+				/*
+					RFC 7208 6.1.
+						The "redirect" modifier is intended for consolidating both
+						authorizations and policy into a common set to be shared within a
+						single ADMD.  It is possible to control both authorized hosts and
+						policy for an arbitrary number of domains from a single record.
+
+						redirect         = "redirect" "=" domain-spec
+
+						If all mechanisms fail to match, and a "redirect" modifier is
+						present, then processing proceeds as follows:
+
+						The <domain-spec> portion of the redirect section is expanded as per
+						the macro rules in Section 7.  Then check_host() is evaluated with
+						the resulting string as the <domain>.  The <ip> and <sender>
+						arguments remain the same as in the current evaluation of
+						check_host().
+
+						The result of this new evaluation of check_host() is then considered
+						the result of the current evaluation with the exception that if no
+						SPF record is found, or if the <target-name> is malformed, the result
+						is a "permerror" rather than "none".
+
+						Note that the newly queried domain can itself specify redirect
+						processing.
+
+					NOTE: Macros are not implemented
+				*/
+				if modifier.Value == "" {
+					return errors.New("No domain given for redirect modifier")
+				}
+				redirect_spf, err := NewSPF(modifier.Value, spf.dns)
+				if err != nil {
+					return err
+				}
+				spf.Redirects = append(spf.Redirects, redirect_spf)
+
+			}
+
+		case "exp":
+			{
+				/*
+					RFC 7208 6.2.
+						If check_host() results in a "fail" due to a mechanism match (such as
+						"-all"), and the "exp" modifier is present, then the explanation
+						string returned is computed as described below.  If no "exp" modifier
+						is present, then either a default explanation string or an empty
+						explanation string MUST be returned to the calling application.
+
+						The <domain-spec> is macro expanded (see Section 7) and becomes the
+						<target-name>.  The DNS TXT RRset for the <target-name> is fetched.
+
+						If there are any DNS processing errors (any RCODE other than 0), or
+						if no records are returned, or if more than one record is returned,
+						or if there are syntax errors in the explanation string, then proceed
+						as if no "exp" modifier was given.
+				*/
+
+			}
+
+		}
+
+	}
+
+	return nil
+}
+
 // GetRanges composes the CIDR IP ranges following RFC 4632 and RFC 4291
 // of the given IPs, with a given IPv4 CIDR and IPv6 CIDR
 func GetRanges(ips []string, ip4_cidr string, ip6_cidr string) ([]net.IPNet, error) {
@@ -329,6 +413,9 @@ func GetRanges(ips []string, ip4_cidr string, ip6_cidr string) ([]net.IPNet, err
 /*
 CheckIP checks if the given IP is a valid sender
 (returns answers following section 2.6 from RFC 7208)
+
+	result           = "Pass" / "Fail" / "SoftFail" / "Neutral" /
+						"None" / "TempError" / "PermError"
 
 	RFC 7208: 2.6.  Results of Evaluation:
 
@@ -381,7 +468,7 @@ func (spf *SPF) CheckIP(ip_str string) (string, error) {
 	}
 	for _, ip_net := range spf.SoftFail {
 		if ip_net.Contains(ip) {
-			return "Softfail", nil
+			return "SoftFail", nil
 		}
 	}
 	for _, ip_net := range spf.Neutral {
@@ -445,6 +532,18 @@ func (spf *SPF) CheckIP(ip_str string) (string, error) {
 		}
 	}
 
+	// Check redirects
+	/*
+		RFC 7208 6.1.
+			For clarity, any "redirect" modifier SHOULD appear as the very last
+			term in a record.  Any "redirect" modifier MUST be ignored if there
+			is an "all" mechanism anywhere in the record.
+	*/
+	for _, redirect := range spf.Redirects {
+		// TODO limit to 1 redirect modifier per SPF record!
+		return redirect.CheckIP(ip_str)
+	}
+
 	// No results found -> check all
 	if spf.All != "undefined" {
 		return qualifierToResult(spf.All), nil
@@ -460,7 +559,7 @@ func qualifierToResult(qualifier string) string {
 	case "?":
 		return "Neutral"
 	case "~":
-		return "Softfail"
+		return "SoftFail"
 	case "-":
 		return "Fail"
 	}
@@ -497,6 +596,15 @@ func (spf SPF) toString(prefix string) string {
 		for _, i := range spf.Includes {
 			out += i.qualifier
 			out += i.spf.toString(prefix + "    ")
+		}
+		return out
+	}()
+	out += "\n"
+	out += prefix + "  Redirects: "
+	out += func() string {
+		out := ""
+		for _, i := range spf.Redirects {
+			out += i.toString(prefix + "    ")
 		}
 		return out
 	}()
