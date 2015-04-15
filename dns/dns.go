@@ -8,6 +8,7 @@ import (
 
 type DnsResolver interface {
 	GetSPFRecord(string) (string, error)
+	GetARecords(string) ([]string, error)
 }
 
 type GoSPFDNS struct {
@@ -33,6 +34,10 @@ func IsSupportedProtocol(record string) bool {
 
 }
 
+func (dns *GoSPFDNS) GetARecords(name string) ([]string, error) {
+	return net.LookupHost(name)
+}
+
 func (dns *GoSPFDNS) GetSPFRecord(name string) (string, error) {
 
 	records, err := net.LookupTXT(name)
@@ -46,9 +51,11 @@ func (dns *GoSPFDNS) GetSPFRecord(name string) (string, error) {
 		}
 		if !IsSupportedProtocol(record) {
 			return "", errors.New("Unsupported SPF record: " + record)
+		} else {
+			return record, nil
 		}
 	}
 
-	return "", nil
+	return "", errors.New("No SPF record found for " + name)
 
 }

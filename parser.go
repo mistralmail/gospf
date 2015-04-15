@@ -128,6 +128,16 @@ type Directive struct {
 	Arguments map[string]string // everything after ':'
 }
 
+func (d Directive) String() string {
+	out := "{"
+	out += "Qualifier: " + d.Qualifier + ", "
+	out += "Mechanism: " + d.Mechanism + ", "
+	//out += "Arguments: " + d.Arguments.String()
+	out += "}"
+
+	return out
+}
+
 type Directives []Directive
 
 func isQualifier(char uint8) bool {
@@ -237,11 +247,17 @@ func (d *Directive) getArguments() map[string]string {
 
 func (directives Directives) process() Directives {
 
+	out := make(Directives, 0)
+
 	for _, d := range directives {
 		d.Qualifier = d.getQualifier()
 		d.Mechanism = d.getMechanism()
 		d.Arguments = d.getArguments()
+
+		out = append(out, d)
 	}
+
+	directives = out
 
 	return directives
 

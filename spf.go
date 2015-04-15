@@ -1,8 +1,12 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"github.com/gopistolet/gospf/dns"
 	"net"
+	"strconv"
+	"strings"
 )
 
 type SPF struct {
@@ -11,10 +15,23 @@ type SPF struct {
 	SoftFail []net.IPNet // IP's that fail weakly
 	Fail     []net.IPNet // IP's that fail
 	All      string      // qualifier of 'all' directive
+	Domain   string
 
 	dns        dns.DnsResolver
 	directives Directives
 	modifiers  Modifiers
+}
+
+func (spf SPF) String() string {
+	out := "{\n"
+	out += "  Domain:   " + spf.Domain + "\n"
+	out += "  Pass:     " + fmt.Sprint(spf.Pass) + "\n"
+	out += "  Neutral:  " + fmt.Sprint(spf.Neutral) + "\n"
+	out += "  SoftFail: " + fmt.Sprint(spf.SoftFail) + "\n"
+	out += "  Fail:     " + fmt.Sprint(spf.Fail) + "\n"
+	out += "  All:      " + spf.All + "\n"
+	out += "}\n"
+	return out
 }
 
 // NewSPF creates a new SPF instance
@@ -26,6 +43,7 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 		Neutral:  make([]net.IPNet, 0),
 		SoftFail: make([]net.IPNet, 0),
 		Fail:     make([]net.IPNet, 0),
+		Domain:   domain,
 	}
 
 	spf.dns = dns_resolver
@@ -39,9 +57,42 @@ func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
 		return nil, err
 	}
 	spf.directives = Directives(directives)
+	spf.directives = spf.directives.process()
 	spf.modifiers = Modifiers(modifiers)
 
 	return &spf, nil
+}
+
+func (spf *SPF) handleIPNets(ips []net.IPNet, qualifier string) {
+	/*
+		RFC 7208 4.6.2.
+
+			The possible qualifiers, and the results they cause check_host() to
+			return, are as follows:
+
+			   "+" pass
+			   "-" fail
+			   "~" softfail
+			   "?" neutral
+
+			The qualifier is optional and defaults to "+".
+	*/
+
+	var list *[]net.IPNet
+	switch qualifier {
+	case "+", "":
+		list = &spf.Pass
+	case "?":
+		list = &spf.Neutral
+	case "~":
+		list = &spf.SoftFail
+	case "-":
+		list = &spf.Fail
+	default:
+		panic("Unknown qualifier")
+	}
+
+	*list = append(*list, ips...)
 }
 
 func (spf *SPF) handleDirectives() error {
@@ -95,6 +146,19 @@ func (spf *SPF) handleDirectives() error {
 						IPv6).  The <ip> is compared to the returned address(es).  If any
 						address matches, the mechanism matches.
 				*/
+				domain := spf.Domain
+				if d, ok := directive.Arguments["domain"]; ok && d != "" {
+					domain = d
+				}
+				ips, err := spf.dns.GetARecords(domain)
+				if err != nil {
+					return err
+				}
+				ip_nets, err := GetRanges(ips, directive.Arguments["ip4-cidr"], directive.Arguments["ip6-cidr"])
+				if err != nil {
+					return err
+				}
+				spf.handleIPNets(ip_nets, directive.Qualifier)
 			}
 		case "mx":
 			{
@@ -167,6 +231,46 @@ func (spf *SPF) handleDirectives() error {
 
 	return nil
 
+}
+
+// GetRanges composes the CIDR IP ranges following RFC 4632 and RFC 4291
+// of the given IPs, with a given IPv4 CIDR and IPv6 CIDR
+func GetRanges(ips []string, ip4_cidr string, ip6_cidr string) ([]net.IPNet, error) {
+	net_out := make([]net.IPNet, 0)
+
+	for _, ip := range ips {
+		cidr := ""
+		if strings.Contains(ip, ":") {
+			// IPv6
+			cidr = ip6_cidr
+			if cidr == "" {
+				cidr = "128"
+			}
+			if c, err := strconv.ParseInt(cidr, 10, 16); err != nil || c < 0 || c > 128 {
+				return nil, errors.New("Invalid IPv6 CIDR length: " + cidr)
+			}
+
+		} else {
+			// IPv4
+			cidr = ip4_cidr
+			if cidr == "" {
+				cidr = "32"
+			}
+			if c, err := strconv.ParseInt(cidr, 10, 16); err != nil || c < 0 || c > 32 {
+				return nil, errors.New("Invalid IPv4 CIDR length: " + cidr)
+			}
+		}
+		ip += "/" + cidr
+
+		_, ipnet, err := net.ParseCIDR(ip)
+		if err != nil {
+			return nil, err
+		}
+		net_out = append(net_out, *ipnet)
+
+	}
+
+	return net_out, nil
 }
 
 /*

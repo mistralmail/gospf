@@ -99,6 +99,10 @@ func TestDirective(t *testing.T) {
 				m: "a",
 			},
 			{
+				d: Directive{term: "a"},
+				m: "a",
+			},
+			{
 				d: Directive{term: "mx:mail.example.com"},
 				m: "mx",
 			},
