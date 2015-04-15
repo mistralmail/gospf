@@ -29,7 +29,22 @@ func (spf SPF) String() string {
 	out += "  Neutral:  " + fmt.Sprint(spf.Neutral) + "\n"
 	out += "  SoftFail: " + fmt.Sprint(spf.SoftFail) + "\n"
 	out += "  Fail:     " + fmt.Sprint(spf.Fail) + "\n"
-	out += "  All:      " + spf.All + "\n"
+	out += "  All:      "
+	out += func() string {
+		switch spf.All {
+		case "+":
+			return "Pass"
+		case "?":
+			return "Neutral"
+		case "~":
+			return "SoftFail"
+		case "-":
+			return "Fail"
+		default:
+			return ""
+		}
+	}()
+	out += "\n"
 	out += "}\n"
 	return out
 }
@@ -235,6 +250,12 @@ func (spf *SPF) handleDirectives() error {
 						ip4  = "ip4"   ":" ip4-network   [ ip4-cidr-length ]
 						ip4-cidr-length  = "/" ("0" / %x31-39 0*1DIGIT) ; value range 0-32
 				*/
+				ips := []string{directive.Arguments["ip"]}
+				ip_nets, err := GetRanges(ips, directive.Arguments["ip4-cidr"], directive.Arguments["ip6-cidr"])
+				if err != nil {
+					return err
+				}
+				spf.handleIPNets(ip_nets, directive.Qualifier)
 			}
 		case "ip6":
 			{
@@ -242,6 +263,12 @@ func (spf *SPF) handleDirectives() error {
 					ip6  = "ip6"   ":" ip6-network   [ ip6-cidr-length ]
 					ip6-cidr-length  = "/" ("0" / %x31-39 0*2DIGIT) ; value range 0-128
 				*/
+				ips := []string{directive.Arguments["ip"]}
+				ip_nets, err := GetRanges(ips, directive.Arguments["ip4-cidr"], directive.Arguments["ip6-cidr"])
+				if err != nil {
+					return err
+				}
+				spf.handleIPNets(ip_nets, directive.Qualifier)
 			}
 		case "exists":
 			{
