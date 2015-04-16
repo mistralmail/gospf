@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/gopistolet/gospf/dns"
+	"github.com/gopistolet/gospf"
 	_ "net"
 	"os"
 )
@@ -19,7 +20,7 @@ func main() {
 
 	domain := os.Args[1]
 
-	spf, err := NewSPF(domain, &dns.GoSPFDNS{})
+	spf, err := gospf.NewSPF(domain, &dns.GoSPFDNS{})
 	if err != nil {
 		fmt.Println(err)
 		return

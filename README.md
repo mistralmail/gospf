@@ -7,24 +7,71 @@ GoSPF
 
 **Don't use, WIP**
 
-Build
+Usage
 -----
 
-Compile the code and run all unit tests:
+Get GoSPF and run all unit test:
 
-    $ go build
+    $ go get github.com/gopistolet/gospf
+    $ cd $GOPATH/src/github.com/gopistolet/gospf
     $ go test ./...
 
+### Command line tool
 
-Run
----
+Compile the code:
 
-You can run GoSPF in the console to validate an IP address against a domain: `./gospf domain ip ["debug"]`. e.g.:
+    $ go build -o spf github.com/gopistolet/gospf/gospf
 
-    $ ./gospf google.com 66.249.80.0
+You can run GoSPF in the console to validate an IP address against a domain: `./spf domain ip ["debug"]`. e.g.:
+
+    $ ./spf google.com 66.249.80.0
+
+*With `debug` flag added, GoSPF will output the whole parsed SPF object.*
 
 
-With `debug` flag added, GoSPF will output the whole parsed SPF object.
+### Library
+
+GoSPF is meant to be included in other projects.
+To use GoSPF you must create a new `SPF` instance (witch takes a domain and a `gospf/dns` interface).
+Once you have the `SPF` instance you can call `CheckIP(ip string)` on it,
+which will return a response following [*RFC 7208 2.6. Results of Evaluation*](https://tools.ietf.org/html/rfc7208#section-2.6)
+(i.e. `Neutral`, `Pass`, `SoftFail`, `Fail`, ...)
+
+Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/gopistolet/gospf"
+    "github.com/gopistolet/gospf/dns"
+)
+
+func main() {
+
+    domain := "google.com"
+    ip     := "66.249.80.0"
+
+    // create SPF instance
+    spf, err := gospf.NewSPF(domain, &dns.GoSPFDNS{})
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+
+    // check the given IP on that instance
+    check, err := spf.CheckIP(ip)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+
+    fmt.Println(ip, "->", check)
+
+}
+
+```
 
 
 Implementation
