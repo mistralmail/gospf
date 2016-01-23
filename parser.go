@@ -159,6 +159,10 @@ func isQualifier(char uint8) bool {
 
 // Get the qualifier (i.e. +,?,~,-)
 func (d *Directive) getQualifier() string {
+	if len(d.term) <= 0 {
+		return ""
+	}
+
 	if isQualifier(d.term[0]) {
 		return string(d.term[0])
 	} else {
@@ -168,9 +172,13 @@ func (d *Directive) getQualifier() string {
 
 // Get the mechanism (i.e. mx, a, all, ip4, ...)
 func (d *Directive) getMechanism() string {
+	if len(d.term) <= 0 {
+		return ""
+	}
+
 	term := d.term
 	if isQualifier(d.term[0]) {
-		term = term[1:len(term)]
+		term = term[1:]
 	}
 	index := strings.Index(term, ":")
 	if index == -1 {
