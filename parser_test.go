@@ -2,8 +2,9 @@ package gospf
 
 import (
 	_ "fmt"
-	. "github.com/smartystreets/goconvey/convey"
 	"testing"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestGetTerms(t *testing.T) {
@@ -76,6 +77,10 @@ func TestDirective(t *testing.T) {
 				d: Directive{term: "?include:_spf.google.com"},
 				q: "?",
 			},
+			{
+				d: Directive{term: ""},
+				q: "",
+			},
 		}
 
 		for _, term := range terms {
@@ -117,6 +122,10 @@ func TestDirective(t *testing.T) {
 			{
 				d: Directive{term: "include:_spf.google.com"},
 				m: "include",
+			},
+			{
+				d: Directive{term: ""},
+				m: "",
 			},
 		}
 
