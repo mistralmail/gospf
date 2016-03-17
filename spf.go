@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+const (
+	// DNSLookupLimit represents the max permitted DNS queries per RFC 7208 § 4.6.4
+	DNSLookupLimit = 10
+	// VoidLookupLimit represents the max permitted failed DNS queries per RFC 7208 § 4.6.4
+	VoidLookupLimit = 2
+)
+
 type include struct {
 	qualifier string
 	spf       *SPF
@@ -24,9 +31,11 @@ type SPF struct {
 	Includes []include // Processed SPF object of include mechanism
 	Redirect *SPF      // Processed SPF object of include mechanism
 
-	dns        dns.DnsResolver
-	directives Directives
-	modifiers  Modifiers
+	dns             dns.DnsResolver
+	directives      Directives
+	modifiers       Modifiers
+	dnsLookupCount  int
+	voidLookupCount int
 }
 
 func (spf SPF) String() string {
@@ -36,20 +45,20 @@ func (spf SPF) String() string {
 // NewSPF creates a new SPF instance
 // fully loaded with all the SPF directives
 // (so no more DNS lookups must be done after constructing the instance)
-func NewSPF(domain string, dns_resolver dns.DnsResolver) (*SPF, error) {
+func NewSPF(domain string, dnsResolver dns.DnsResolver, dnsLookupCount int, voidLookupCount int) (*SPF, error) {
 	spf := SPF{
-		Pass:     make([]net.IPNet, 0),
-		Neutral:  make([]net.IPNet, 0),
-		SoftFail: make([]net.IPNet, 0),
-		Fail:     make([]net.IPNet, 0),
-		Domain:   domain,
-		Includes: make([]include, 0),
-		Redirect: nil,
-		All:      "undefined",
+		Pass:            make([]net.IPNet, 0),
+		Neutral:         make([]net.IPNet, 0),
+		SoftFail:        make([]net.IPNet, 0),
+		Fail:            make([]net.IPNet, 0),
+		Domain:          domain,
+		Includes:        make([]include, 0),
+		Redirect:        nil,
+		All:             "undefined",
+		dns:             dnsResolver,
+		dnsLookupCount:  dnsLookupCount,
+		voidLookupCount: voidLookupCount,
 	}
-
-	spf.dns = dns_resolver
-
 	record, err := spf.dns.GetSPFRecord(domain)
 	if err != nil {
 		return nil, err
@@ -144,7 +153,20 @@ func (spf *SPF) handleDirectives() error {
 				if _, ok := directive.Arguments["domain"]; !ok {
 					return errors.New("No domain given for include mechanism")
 				}
-				include_spf, err := NewSPF(directive.Arguments["domain"], spf.dns)
+				err := spf.incDNSLookupCount(1)
+				if err != nil {
+					return err
+				}
+				include_spf, err := NewSPF(
+					directive.Arguments["domain"], spf.dns, spf.dnsLookupCount, spf.voidLookupCount)
+				if err != nil {
+					return err
+				}
+				err = spf.incDNSLookupCount(include_spf.dnsLookupCount - spf.dnsLookupCount)
+				if err != nil {
+					return err
+				}
+				err = spf.incVoidLookupCount(include_spf.voidLookupCount - spf.voidLookupCount)
 				if err != nil {
 					return err
 				}
@@ -173,6 +195,11 @@ func (spf *SPF) handleDirectives() error {
 				if err != nil {
 					return err
 				}
+				err = spf.incDNSLookupCount(1)
+				if err != nil {
+					return err
+				}
+
 				ip_nets, err := GetRanges(ips, directive.Arguments["ip4-cidr"], directive.Arguments["ip6-cidr"])
 				if err != nil {
 					return err
@@ -217,6 +244,10 @@ func (spf *SPF) handleDirectives() error {
 				if err != nil {
 					return err
 				}
+				err = spf.incDNSLookupCount(len(mxRecords))
+				if err != nil {
+					return err
+				}
 				// Get A/AAAA records of MX hosts and process them
 				for _, mx := range mxRecords {
 
@@ -224,6 +255,12 @@ func (spf *SPF) handleDirectives() error {
 					if err != nil {
 						return err
 					}
+					// Return an error if the number of A/AAAA records per MX record exceeds
+					// the DNSLookupLimit.  Reference: RFC 7208 §4.6.4.
+					if len(ips) > DNSLookupLimit {
+						return &PermError{fmt.Sprintf("Exceeded A record lookup limit of %v", DNSLookupLimit)}
+					}
+
 					ip_nets, err := GetRanges(ips, directive.Arguments["ip4-cidr"], directive.Arguments["ip6-cidr"])
 					if err != nil {
 						return err
@@ -282,7 +319,7 @@ func (spf *SPF) handleDirectives() error {
 						(even when the connection type is IPv6).
 						If any A record is returned, this mechanism matches.
 				*/
-
+				// TODO
 			}
 		default:
 			{
@@ -297,7 +334,6 @@ func (spf *SPF) handleDirectives() error {
 }
 
 func (spf *SPF) handleModifiers() error {
-
 	for _, modifier := range spf.modifiers {
 
 		switch modifier.Key {
@@ -337,7 +373,15 @@ func (spf *SPF) handleModifiers() error {
 				if modifier.Value == "" {
 					return errors.New("No domain given for redirect modifier")
 				}
-				redirect_spf, err := NewSPF(modifier.Value, spf.dns)
+				redirect_spf, err := NewSPF(modifier.Value, spf.dns, spf.dnsLookupCount, spf.voidLookupCount)
+				if err != nil {
+					return err
+				}
+				err = spf.incDNSLookupCount(redirect_spf.dnsLookupCount)
+				if err != nil {
+					return err
+				}
+				err = spf.incVoidLookupCount(redirect_spf.voidLookupCount)
 				if err != nil {
 					return err
 				}
@@ -363,7 +407,7 @@ func (spf *SPF) handleModifiers() error {
 						or if there are syntax errors in the explanation string, then proceed
 						as if no "exp" modifier was given.
 				*/
-
+				// TODO
 			}
 
 		}
@@ -371,6 +415,60 @@ func (spf *SPF) handleModifiers() error {
 	}
 
 	return nil
+}
+
+/*
+RFC 7208:
+
+4.6.4.  DNS Lookup Limits
+
+   Some mechanisms and modifiers (collectively, "terms") cause DNS
+   queries at the time of evaluation, and some do not.  The following
+   terms cause DNS queries: the "include", "a", "mx", "ptr", and
+   "exists" mechanisms, and the "redirect" modifier.  SPF
+   implementations MUST limit the total number of those terms to 10
+   during SPF evaluation, to avoid unreasonable load on the DNS.  If
+   this limit is exceeded, the implementation MUST return "permerror".
+   The other terms -- the "all", "ip4", and "ip6" mechanisms, and the
+   "exp" modifier -- do not cause DNS queries at the time of SPF
+   evaluation (the "exp" modifier only causes a lookup at a later time),
+   and their use is not subject to this limit.
+*/
+func (s *SPF) incDNSLookupCount(amt int) error {
+	s.dnsLookupCount = s.dnsLookupCount + amt
+	if s.dnsLookupCount > DNSLookupLimit {
+		return &PermError{fmt.Sprintf("Domain %v exceeds max amount of dns queries: %v", s.Domain, DNSLookupLimit)}
+	}
+	return nil
+}
+
+/* RFC 7208:
+
+   As described at the end of Section 11.1, there may be cases where it
+   is useful to limit the number of "terms" for which DNS queries return
+   either a positive answer (RCODE 0) with an answer count of 0, or a
+   "Name Error" (RCODE 3) answer.  These are sometimes collectively
+   referred to as "void lookups".  SPF implementations SHOULD limit
+   "void lookups" to two.  An implementation MAY choose to make such a
+   limit configurable.  In this case, a default of two is RECOMMENDED.
+   Exceeding the limit produces a "permerror" result.
+*/
+func (s *SPF) incVoidLookupCount(amt int) error {
+	s.voidLookupCount = s.voidLookupCount + amt
+	if s.voidLookupCount >= VoidLookupLimit {
+		return &PermError{fmt.Sprintf("Domain %v exceeds max amount of void lookups: %v", s.Domain, VoidLookupLimit)}
+	}
+	return nil
+}
+
+// PermError means the domain's published records could not be correctly interpreted.
+// These are described in RFC 7208 Section 8.7.
+type PermError struct {
+	s string
+}
+
+func (l *PermError) Error() string {
+	return l.s
 }
 
 // GetRanges composes the CIDR IP ranges following RFC 4632 and RFC 4291

@@ -2,7 +2,6 @@ package dns
 
 import (
 	"errors"
-	_ "fmt"
 	"net"
 )
 
