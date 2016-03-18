@@ -42,10 +42,14 @@ func (spf SPF) String() string {
 	return spf.toString("")
 }
 
-// NewSPF creates a new SPF instance
+// New create a new SPF instance
 // fully loaded with all the SPF directives
 // (so no more DNS lookups must be done after constructing the instance)
-func NewSPF(domain string, dnsResolver dns.DnsResolver, dnsLookupCount int, voidLookupCount int) (*SPF, error) {
+func New(domain string, dnsResolver dns.DnsResolver) (*SPF, error) {
+	return newSPF(domain, dnsResolver, 0, 0)
+}
+
+func newSPF(domain string, dnsResolver dns.DnsResolver, dnsLookupCount int, voidLookupCount int) (*SPF, error) {
 	spf := SPF{
 		Pass:            make([]net.IPNet, 0),
 		Neutral:         make([]net.IPNet, 0),
@@ -157,7 +161,7 @@ func (spf *SPF) handleDirectives() error {
 				if err != nil {
 					return err
 				}
-				include_spf, err := NewSPF(
+				include_spf, err := newSPF(
 					directive.Arguments["domain"], spf.dns, spf.dnsLookupCount, spf.voidLookupCount)
 				if err != nil {
 					return err
@@ -373,7 +377,7 @@ func (spf *SPF) handleModifiers() error {
 				if modifier.Value == "" {
 					return errors.New("No domain given for redirect modifier")
 				}
-				redirect_spf, err := NewSPF(modifier.Value, spf.dns, spf.dnsLookupCount, spf.voidLookupCount)
+				redirect_spf, err := newSPF(modifier.Value, spf.dns, spf.dnsLookupCount, spf.voidLookupCount)
 				if err != nil {
 					return err
 				}

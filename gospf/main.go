@@ -20,7 +20,7 @@ func main() {
 
 	domain := os.Args[1]
 
-	spf, err := gospf.NewSPF(domain, &dns.GoSPFDNS{}, 0, 0)
+	spf, err := gospf.New(domain, &dns.GoSPFDNS{})
 	if err != nil {
 		fmt.Println(err)
 		return
