@@ -468,11 +468,15 @@ func (s *SPF) incVoidLookupCount(amt int) error {
 // PermError means the domain's published records could not be correctly interpreted.
 // These are described in RFC 7208 Section 8.7.
 type PermError struct {
-	s string
+	Message string
 }
 
 func (l *PermError) Error() string {
-	return l.s
+	return "PermError"
+}
+
+func (l *PermError) String() string {
+	return l.Message
 }
 
 // GetRanges composes the CIDR IP ranges following RFC 4632 and RFC 4291
