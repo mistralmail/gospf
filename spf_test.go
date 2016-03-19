@@ -138,22 +138,6 @@ func TestAddressRanges(t *testing.T) {
 
 }
 
-func TestSimpleSPFLookup(t *testing.T) {
-	tests := []SPFTestParams{
-		{
-			Domain: "simple.example.com",
-			IP:     "1.2.3.4",
-			Want:   "Pass",
-		},
-		{
-			Domain: "simple.example.com",
-			IP:     "1.2.3.5",
-			Want:   "Fail",
-		},
-	}
-	runSPFTest("Testing simple spf lookup", t, tests)
-}
-
 func runSPFTest(testName string, t *testing.T, tests []SPFTestParams) {
 	Convey(testName, t, func() {
 		testResolver := &TestResolver{}
@@ -173,6 +157,75 @@ func runSPFTest(testName string, t *testing.T, tests []SPFTestParams) {
 	})
 }
 
+func TestSimpleSPFLookup(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "simple.example.com",
+			IP:     "1.2.3.4",
+			Want:   "Pass",
+		},
+		{
+			Domain: "simple.example.com",
+			IP:     "1.2.3.5",
+			Want:   "Fail",
+		},
+	}
+	runSPFTest("Testing simple spf lookup", t, tests)
+}
+
+func TestSPFInclude(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "example.com",
+			IP:     "1.1.1.4",
+			Want:   "Pass",
+		},
+		{
+			Domain: "example.com",
+			IP:     "1111::5",
+			Want:   "Pass",
+		},
+	}
+	runSPFTest("Testing SPF Include directive", t, tests)
+}
+
+func TestSPFAll(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "example.com",
+			IP:     "8.8.8.8",
+			Want:   "SoftFail",
+		},
+		{
+			Domain: "example.com",
+			IP:     "aaaa::5",
+			Want:   "SoftFail",
+		},
+		{
+			Domain: "simple.example.com",
+			IP:     "aaaa::5",
+			Want:   "Fail",
+		},
+	}
+	runSPFTest("Testing SFP All", t, tests)
+}
+
+func TestTooManyLookups(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "recursive.example.com",
+			IP:     "1.1.1.1",
+			Want:   "PermError",
+		},
+		{
+			Domain: "too-many-a-records.example.com",
+			IP:     "1.1.1.1",
+			Want:   "PermError",
+		},
+	}
+	runSPFTest("Testing Too Many Lookups", t, tests)
+}
+
 // Fixtures for SPF processing and recursion
 
 type SPFTestParams struct {
@@ -184,17 +237,18 @@ type SPFTestParams struct {
 var txtRecords = map[string][]string{
 	"simple.example.com": []string{"v=spf1 ip4:1.2.3.4 -all"},
 	"example.com":        []string{"v=spf1 include:_spf.example.com ~all"},
-	"_spf.example.com": []string{"v=spf1 include:spf1.example.com" +
-		"include:spf2.example.com" +
+	"_spf.example.com": []string{"v=spf1 include:spf1.example.com " +
+		"include:spf2.example.com " +
 		"include:spf3.example.com"},
-	"spf1.example.com":            []string{"v=spf1 ip4:1.1.1.1/24 ~all"},
-	"spf2.example.com":            []string{"v=spf1 ip4:1.1.1.2/24 ip4:1.1.1.3/24 ip4:1.1.1.4/24 ~all"},
-	"spf3.example.com":            []string{"v=spf1 ip6:1111::1/48 ~all"},
-	"matchall.example.com":        []string{"v=spf1 ip4:0.0.0.0/0 ip6:0::1/0 -all"},
-	"recursive.example.com":       []string{"v=spf1 include:example.com include:recursive.example.com -all"},
-	"mx-check.example.com":        []string{"v=spf1 mx:example.com ~all"},
-	"redirect.example.com":        []string{"v=spf1 redirect:example.com"},
-	"ignore-redirect.example.com": []string{"v=spf1 redirect:example.com -all"},
+	"spf1.example.com":               []string{"v=spf1 ip4:1.1.1.1/24 ~all"},
+	"spf2.example.com":               []string{"v=spf1 ip4:1.1.2.1/24 ip4:1.1.3.1/24 ip4:1.1.4.1/24 ~all"},
+	"spf3.example.com":               []string{"v=spf1 ip6:1111::1/48 ~all"},
+	"matchall.example.com":           []string{"v=spf1 ip4:0.0.0.0/0 ip6:0::1/0 -all"},
+	"recursive.example.com":          []string{"v=spf1 include:example.com include:recursive.example.com -all"},
+	"too-many-a-records.example.com": []string{"v=spf1 mx -all"},
+	"mx-check.example.com":           []string{"v=spf1 mx:example.com ~all"},
+	"redirect.example.com":           []string{"v=spf1 redirect:example.com"},
+	"ignore-redirect.example.com":    []string{"v=spf1 redirect:example.com -all"},
 }
 
 var mxRecords = map[string][]*net.MX{
@@ -214,6 +268,9 @@ var mxRecords = map[string][]*net.MX{
 		&net.MX{Host: "mxa.example.com", Pref: 9},
 		&net.MX{Host: "mxb.example.com", Pref: 10},
 		&net.MX{Host: "mxb.example.com", Pref: 11},
+	},
+	"too-many-a-records.example.com": []*net.MX{
+		&net.MX{Host: "too-many-a-records.example.com", Pref: 1},
 	},
 }
 
