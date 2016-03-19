@@ -1,10 +1,12 @@
 package gospf
 
 import (
-	_ "fmt"
+	"fmt"
 	. "github.com/smartystreets/goconvey/convey"
 	"net"
 	"testing"
+
+	"github.com/gopistolet/gospf/dns"
 )
 
 func TestHandleIPNets(t *testing.T) {
@@ -135,3 +137,154 @@ func TestAddressRanges(t *testing.T) {
 	})
 
 }
+
+func TestSimpleSPFLookup(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "simple.example.com",
+			IP:     "1.2.3.4",
+			Want:   "Pass",
+		},
+		{
+			Domain: "simple.example.com",
+			IP:     "1.2.3.5",
+			Want:   "Fail",
+		},
+	}
+	runSPFTest("Testing simple spf lookup", t, tests)
+}
+
+func runSPFTest(testName string, t *testing.T, tests []SPFTestParams) {
+	Convey(testName, t, func() {
+		testResolver := &TestResolver{}
+		for _, test := range tests {
+			spf, err := New(test.Domain, testResolver)
+			if err != nil {
+				So(err.Error(), ShouldEqual, test.Want)
+				continue
+			}
+			check, err := spf.CheckIP(test.IP)
+			if err != nil {
+				So(err.Error(), ShouldEqual, test.Want)
+				continue
+			}
+			So(check, ShouldEqual, test.Want)
+		}
+	})
+}
+
+// Fixtures for SPF processing and recursion
+
+type SPFTestParams struct {
+	Domain string
+	IP     string
+	Want   string
+}
+
+var txtRecords = map[string][]string{
+	"simple.example.com": []string{"v=spf1 ip4:1.2.3.4 -all"},
+	"example.com":        []string{"v=spf1 include:_spf.example.com ~all"},
+	"_spf.example.com": []string{"v=spf1 include:spf1.example.com" +
+		"include:spf2.example.com" +
+		"include:spf3.example.com"},
+	"spf1.example.com":            []string{"v=spf1 ip4:1.1.1.1/24 ~all"},
+	"spf2.example.com":            []string{"v=spf1 ip4:1.1.1.2/24 ip4:1.1.1.3/24 ip4:1.1.1.4/24 ~all"},
+	"spf3.example.com":            []string{"v=spf1 ip6:1111::1/48 ~all"},
+	"matchall.example.com":        []string{"v=spf1 ip4:0.0.0.0/0 ip6:0::1/0 -all"},
+	"recursive.example.com":       []string{"v=spf1 include:example.com include:recursive.example.com -all"},
+	"mx-check.example.com":        []string{"v=spf1 mx:example.com ~all"},
+	"redirect.example.com":        []string{"v=spf1 redirect:example.com"},
+	"ignore-redirect.example.com": []string{"v=spf1 redirect:example.com -all"},
+}
+
+var mxRecords = map[string][]*net.MX{
+	"example.com": []*net.MX{
+		&net.MX{Host: "mxa.example.com", Pref: 10},
+		&net.MX{Host: "mxb.example.com", Pref: 10},
+	},
+	"too-many-mx-records.example.com": []*net.MX{
+		&net.MX{Host: "mxa.example.com", Pref: 1},
+		&net.MX{Host: "mxb.example.com", Pref: 2},
+		&net.MX{Host: "mxa.example.com", Pref: 3},
+		&net.MX{Host: "mxb.example.com", Pref: 4},
+		&net.MX{Host: "mxa.example.com", Pref: 5},
+		&net.MX{Host: "mxb.example.com", Pref: 6},
+		&net.MX{Host: "mxa.example.com", Pref: 7},
+		&net.MX{Host: "mxb.example.com", Pref: 8},
+		&net.MX{Host: "mxa.example.com", Pref: 9},
+		&net.MX{Host: "mxb.example.com", Pref: 10},
+		&net.MX{Host: "mxb.example.com", Pref: 11},
+	},
+}
+
+var aRecords = map[string][]string{
+	"example.com": []string{
+		"1.2.3.1",
+		"1.2.3.2",
+		"1.2.3.3",
+		"1.2.3.4",
+		"1.2.3.5",
+	},
+	"mxa.example.com": []string{
+		"1.2.3.1",
+	},
+	"mxb.example.com": []string{
+		"1.2.3.2",
+	},
+	"test.com": []string{
+		"10.10.10.1",
+	},
+	"too-many-a-records.example.com": []string{
+		"1.1.1.1",
+		"1.1.1.2",
+		"1.1.1.3",
+		"1.1.1.4",
+		"1.1.1.5",
+		"1.1.1.6",
+		"1.1.1.7",
+		"1.1.1.8",
+		"1.1.1.9",
+		"1.1.1.10",
+		"1.1.1.11",
+		"1.1.1.12",
+	},
+}
+
+// Set up test DNS resolver
+type TestResolver struct {
+}
+
+func (t *TestResolver) GetARecords(domain string) ([]string, error) {
+	val, ok := aRecords[domain]
+	if !ok {
+		return val, fmt.Errorf("%v lookup failed", domain)
+	}
+	return val, nil
+}
+
+func (t *TestResolver) GetMXRecords(domain string) ([]*net.MX, error) {
+	val, ok := mxRecords[domain]
+	if !ok {
+		return val, fmt.Errorf("%v lookup failed", domain)
+	}
+	return val, nil
+}
+
+func (t *TestResolver) GetSPFRecord(domain string) (string, error) {
+	records, ok := txtRecords[domain]
+	if !ok {
+		return "", fmt.Errorf("%v lookup failed", domain)
+	}
+	for _, record := range records {
+		if !dns.IsSPF(record) {
+			continue
+		}
+		if !dns.IsSupportedProtocol(record) {
+			return "", fmt.Errorf("Unsupported SPF record: " + record)
+		}
+		return record, nil
+	}
+	return "", fmt.Errorf("No SPF record found for " + domain)
+}
+
+// end setup of test resolver
