@@ -1,7 +1,6 @@
 package gospf
 
 import (
-	"errors"
 	"fmt"
 	"github.com/gopistolet/gospf/dns"
 	"net"
@@ -65,7 +64,7 @@ func newSPF(domain string, dnsResolver dns.DnsResolver, dnsLookupCount int, void
 	}
 	record, err := spf.dns.GetSPFRecord(domain)
 	if err != nil {
-		return nil, err
+		return nil, &PermError{err.Error()}
 	}
 	directives, modifiers, err := getTerms(record)
 	if err != nil {
@@ -155,7 +154,7 @@ func (spf *SPF) handleDirectives() error {
 						check_host().
 				*/
 				if _, ok := directive.Arguments["domain"]; !ok {
-					return errors.New("No domain given for include mechanism")
+					return &PermError{"No domain given for include mechanism"}
 				}
 				err := spf.incDNSLookupCount(1)
 				if err != nil {
@@ -372,10 +371,10 @@ func (spf *SPF) handleModifiers() error {
 					NOTE: Macros are not implemented
 				*/
 				if spf.Redirect != nil {
-					return errors.New("Duplicate redirect modifier")
+					return &PermError{"Duplicate redirect modifier"}
 				}
 				if modifier.Value == "" {
-					return errors.New("No domain given for redirect modifier")
+					return &PermError{"No domain given for redirect modifier"}
 				}
 				redirect_spf, err := newSPF(modifier.Value, spf.dns, spf.dnsLookupCount, spf.voidLookupCount)
 				if err != nil {
@@ -493,7 +492,7 @@ func GetRanges(ips []string, ip4_cidr string, ip6_cidr string) ([]net.IPNet, err
 				cidr = "128"
 			}
 			if c, err := strconv.ParseInt(cidr, 10, 16); err != nil || c < 0 || c > 128 {
-				return nil, errors.New("Invalid IPv6 CIDR length: " + cidr)
+				return nil, &PermError{"Invalid IPv6 CIDR length: " + cidr}
 			}
 
 		} else {
@@ -503,7 +502,7 @@ func GetRanges(ips []string, ip4_cidr string, ip6_cidr string) ([]net.IPNet, err
 				cidr = "32"
 			}
 			if c, err := strconv.ParseInt(cidr, 10, 16); err != nil || c < 0 || c > 32 {
-				return nil, errors.New("Invalid IPv4 CIDR length: " + cidr)
+				return nil, &PermError{"Invalid IPv4 CIDR length: " + cidr}
 			}
 		}
 		ip += "/" + cidr
