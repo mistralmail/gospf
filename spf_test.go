@@ -226,6 +226,134 @@ func TestTooManyLookups(t *testing.T) {
 	runSPFTest("Testing Too Many Lookups", t, tests)
 }
 
+func TestADirective(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "a.example.com",
+			IP:     "1.2.3.1",
+			Want:   "Pass",
+		},
+		{
+			Domain: "a.example.com",
+			IP:     "1.1.1.1",
+			Want:   "Fail",
+		},
+	}
+	runSPFTest("Testing A directive", t, tests)
+}
+
+func TestMXDirective(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "mx-check.example.com",
+			IP:     "1.2.3.1",
+			Want:   "Pass",
+		},
+		{
+			Domain: "mx-check.example.com",
+			IP:     "8.8.8.8",
+			Want:   "SoftFail",
+		},
+	}
+	runSPFTest("Testing MX directive", t, tests)
+}
+
+func TestRedirect(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "redirect.example.com",
+			IP:     "1.1.1.1",
+			Want:   "Pass",
+		},
+		{
+			Domain: "redirect.example.com",
+			IP:     "8.8.8.8",
+			Want:   "SoftFail",
+		},
+		{
+			Domain: "ignore-redirect.example.com",
+			IP:     "3.3.3.3",
+			Want:   "Pass",
+		},
+		{
+			Domain: "ignore-redirect.example.com",
+			IP:     "8.8.8.8",
+			Want:   "Fail",
+		},
+		{
+			Domain: "dup-redirect.example.com",
+			IP:     "1.1.1.1",
+			Want:   "PermError",
+		},
+		{
+			Domain: "blank-redirect.example.com",
+			IP:     "1.1.1.1",
+			Want:   "PermError",
+		},
+	}
+	runSPFTest("Testing redirect modifier", t, tests)
+}
+
+func TestQualifiers(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "reject.example.com",
+			IP:     "1.1.1.1",
+			Want:   "Fail",
+		},
+		{
+			Domain: "reject.example.com",
+			IP:     "2.2.2.2",
+			Want:   "SoftFail",
+		},
+		{
+			Domain: "reject.example.com",
+			IP:     "3.3.3.3",
+			Want:   "Neutral",
+		},
+		{
+			Domain: "reject.example.com",
+			IP:     "4.4.4.4",
+			Want:   "Pass",
+		},
+		{
+			Domain: "reject.example.com",
+			IP:     "5.5.5.5",
+			Want:   "Neutral",
+		},
+	}
+	runSPFTest("Testing qualifiers", t, tests)
+}
+
+func TestNonexistentSPF(t *testing.T) {
+	tests := []SPFTestParams{
+		{
+			Domain: "nonexistent.example.com",
+			IP:     "1.1.1.1",
+			Want:   "PermError",
+		},
+	}
+	runSPFTest("Testing nonexistent SPF record", t, tests)
+}
+
+// Tests functions that don't actually need test coverage so they
+// are not counted against the coverage percentage by `go test -cover`
+//
+// spf.String
+// PermError.String
+// spf.toString
+func TestCoverage(t *testing.T) {
+	// spf.String
+	// spf.toString
+	testResolver := &TestResolver{}
+	s, _ := New("example.com", testResolver)
+	_ = s.String()
+
+	// PermError.String
+	p := PermError{}
+	_ = p.String()
+}
+
 // Fixtures for SPF processing and recursion
 
 type SPFTestParams struct {
@@ -247,8 +375,13 @@ var txtRecords = map[string][]string{
 	"recursive.example.com":          []string{"v=spf1 include:example.com include:recursive.example.com -all"},
 	"too-many-a-records.example.com": []string{"v=spf1 mx -all"},
 	"mx-check.example.com":           []string{"v=spf1 mx:example.com ~all"},
-	"redirect.example.com":           []string{"v=spf1 redirect:example.com"},
-	"ignore-redirect.example.com":    []string{"v=spf1 redirect:example.com -all"},
+	"redirect.example.com":           []string{"v=spf1 redirect=example.com"},
+	"ignore-redirect.example.com":    []string{"v=spf1 ip4:3.3.3.3/32 redirect=example.com -all"},
+	"dup-redirect.example.com": []string{"v=spf1 ip4:3.3.3.3/32 redirect=example.com " +
+		"redirect=example.com -all"},
+	"blank-redirect.example.com": []string{"v=spf1 ip4:3.3.3.3/32 redirect="},
+	"a.example.com":              []string{"v=spf1 a:example.com -all"},
+	"reject.example.com":         []string{"v=spf1 -ip4:1.1.1.1 ~ip4:2.2.2.2 ?ip4:3.3.3.3 +ip4:4.4.4.4 ?all"},
 }
 
 var mxRecords = map[string][]*net.MX{

@@ -214,3 +214,13 @@ func TestModifiers(t *testing.T) {
 	})
 
 }
+
+// Tests functions that don't actually need test coverage so they
+// are not counted against the coverage percentage by `go test -cover`
+//
+// Directive.String
+func TestParserCoverage(t *testing.T) {
+	// Directive.String
+	d := Directive{}
+	_ = d.String()
+}
