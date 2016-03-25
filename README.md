@@ -5,7 +5,6 @@ GoSPF
 
 *Sender Policy Framework for Go*
 
-**Don't use, WIP**
 
 Usage
 -----
