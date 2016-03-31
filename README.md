@@ -53,7 +53,7 @@ func main() {
     ip     := "66.249.80.0"
 
     // create SPF instance
-    spf, err := gospf.NewSPF(domain, &dns.GoSPFDNS{})
+    spf, err := gospf.New(domain, &dns.GoSPFDNS{})
     if err != nil {
         fmt.Println(err)
         return
