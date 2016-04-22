@@ -2,38 +2,48 @@ package dns
 
 import (
 	_ "fmt"
-	. "github.com/smartystreets/goconvey/convey"
 	"testing"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
-var spfs = []string{
+var validSpfs = []string{
 	"v=spf1 a -all",
 	"v=spf1 a:mail.example.com -all",
 	"v=spf1 ip4:192.0.2.0/24 ip4:198.51.100.123 a -all",
 }
 
+var invalidSpfs = []string{
+	"",
+	"abv=spf",
+	"abda=v=spf1",
+}
+
 func TestIsSPF(t *testing.T) {
-
 	Convey("Testing IsSPF()", t, func() {
-
-		for _, spf := range spfs {
+		for _, spf := range validSpfs {
 			So(IsSPF(spf), ShouldEqual, true)
 		}
 
+		for _, spf := range invalidSpfs {
+			So(IsSPF(spf), ShouldEqual, false)
+		}
 	})
 
 }
 
 func TestIsSupportedProtocol(t *testing.T) {
 
-	Convey("Testing IsSPF()", t, func() {
+	Convey("Testing IsSupportedProtocol()", t, func() {
 
-		for _, spf := range spfs {
+		for _, spf := range validSpfs {
 			So(IsSupportedProtocol(spf), ShouldEqual, true)
 		}
 
+		for _, spf := range invalidSpfs {
+			So(IsSupportedProtocol(spf), ShouldEqual, false)
+		}
 	})
-
 }
 
 func TestLiveDomains(t *testing.T) {
