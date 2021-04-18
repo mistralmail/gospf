@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/gopistolet/gospf"
-	"github.com/gopistolet/gospf/dns"
 	_ "net"
 	"os"
+
+	"github.com/gopistolet/gospf"
+	"github.com/gopistolet/gospf/dns"
 )
 
 func main() {
 
 	fmt.Println("\nGoSPF")
-	fmt.Println("-----\n")
+	fmt.Printf("-----\n")
 
 	if len(os.Args) < 3 {
 		fmt.Println("Usage: " + os.Args[0] + " domain ip [debug]")
@@ -28,7 +29,7 @@ func main() {
 
 	if len(os.Args) >= 4 && os.Args[3] == "debug" {
 		fmt.Print(spf)
-		fmt.Println("\n-----\n")
+		fmt.Printf("\n-----\n")
 	}
 
 	ip := os.Args[2]
@@ -38,6 +39,6 @@ func main() {
 		return
 	}
 
-	fmt.Println(ip, "->", check, "\n")
+	fmt.Printf(ip, "->", check, "\n")
 
 }
