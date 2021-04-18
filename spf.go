@@ -64,6 +64,10 @@ func newSPF(domain string, dnsResolver dns.DnsResolver, dnsLookupCount int, void
 	}
 	record, err := spf.dns.GetSPFRecord(domain)
 	if err != nil {
+		// Host does not exist or has no TXT record.
+		if strings.Contains(err.Error(), "no such host") {
+			return &spf, nil
+		}
 		return nil, &PermError{err.Error()}
 	}
 	directives, modifiers, err := getTerms(record)
