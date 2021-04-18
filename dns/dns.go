@@ -3,6 +3,7 @@ package dns
 import (
 	"errors"
 	"net"
+	"strings"
 )
 
 type DnsResolver interface {
@@ -15,23 +16,19 @@ type GoSPFDNS struct {
 }
 
 func IsSPF(record string) bool {
-
-	if record[0:5] == "v=spf" {
+	if strings.HasPrefix(record, "v=spf") {
 		return true
 	}
 
 	return false
-
 }
 
 func IsSupportedProtocol(record string) bool {
-
-	if record[0:6] == "v=spf1" {
+	if strings.HasPrefix(record, "v=spf1") {
 		return true
 	}
 
 	return false
-
 }
 
 func (dns *GoSPFDNS) GetARecords(name string) ([]string, error) {
@@ -53,11 +50,13 @@ func (dns *GoSPFDNS) GetSPFRecord(name string) (string, error) {
 		if !IsSPF(record) {
 			continue
 		}
+
 		if !IsSupportedProtocol(record) {
 			return "", errors.New("Unsupported SPF record: " + record)
-		} else {
-			return record, nil
 		}
+
+		return record, nil
+
 	}
 
 	return "", errors.New("No SPF record found for " + name)
