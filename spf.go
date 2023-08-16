@@ -2,7 +2,7 @@ package gospf
 
 import (
 	"fmt"
-	"github.com/gopistolet/gospf/dns"
+	"github.com/mistralmail/gospf/dns"
 	"net"
 	"strconv"
 	"strings"
@@ -425,17 +425,17 @@ RFC 7208:
 
 4.6.4.  DNS Lookup Limits
 
-   Some mechanisms and modifiers (collectively, "terms") cause DNS
-   queries at the time of evaluation, and some do not.  The following
-   terms cause DNS queries: the "include", "a", "mx", "ptr", and
-   "exists" mechanisms, and the "redirect" modifier.  SPF
-   implementations MUST limit the total number of those terms to 10
-   during SPF evaluation, to avoid unreasonable load on the DNS.  If
-   this limit is exceeded, the implementation MUST return "permerror".
-   The other terms -- the "all", "ip4", and "ip6" mechanisms, and the
-   "exp" modifier -- do not cause DNS queries at the time of SPF
-   evaluation (the "exp" modifier only causes a lookup at a later time),
-   and their use is not subject to this limit.
+	Some mechanisms and modifiers (collectively, "terms") cause DNS
+	queries at the time of evaluation, and some do not.  The following
+	terms cause DNS queries: the "include", "a", "mx", "ptr", and
+	"exists" mechanisms, and the "redirect" modifier.  SPF
+	implementations MUST limit the total number of those terms to 10
+	during SPF evaluation, to avoid unreasonable load on the DNS.  If
+	this limit is exceeded, the implementation MUST return "permerror".
+	The other terms -- the "all", "ip4", and "ip6" mechanisms, and the
+	"exp" modifier -- do not cause DNS queries at the time of SPF
+	evaluation (the "exp" modifier only causes a lookup at a later time),
+	and their use is not subject to this limit.
 */
 func (s *SPF) incDNSLookupCount(amt int) error {
 	s.dnsLookupCount = s.dnsLookupCount + amt
@@ -445,16 +445,17 @@ func (s *SPF) incDNSLookupCount(amt int) error {
 	return nil
 }
 
-/* RFC 7208:
+/*
+RFC 7208:
 
-   As described at the end of Section 11.1, there may be cases where it
-   is useful to limit the number of "terms" for which DNS queries return
-   either a positive answer (RCODE 0) with an answer count of 0, or a
-   "Name Error" (RCODE 3) answer.  These are sometimes collectively
-   referred to as "void lookups".  SPF implementations SHOULD limit
-   "void lookups" to two.  An implementation MAY choose to make such a
-   limit configurable.  In this case, a default of two is RECOMMENDED.
-   Exceeding the limit produces a "permerror" result.
+	As described at the end of Section 11.1, there may be cases where it
+	is useful to limit the number of "terms" for which DNS queries return
+	either a positive answer (RCODE 0) with an answer count of 0, or a
+	"Name Error" (RCODE 3) answer.  These are sometimes collectively
+	referred to as "void lookups".  SPF implementations SHOULD limit
+	"void lookups" to two.  An implementation MAY choose to make such a
+	limit configurable.  In this case, a default of two is RECOMMENDED.
+	Exceeding the limit produces a "permerror" result.
 */
 func (s *SPF) incVoidLookupCount(amt int) error {
 	s.voidLookupCount = s.voidLookupCount + amt

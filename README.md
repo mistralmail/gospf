@@ -1,8 +1,6 @@
 GoSPF
 =====
 
-[![Build Status](https://travis-ci.org/gopistolet/gospf.svg?branch=master)](https://travis-ci.org/gopistolet/gospf)
-
 *Sender Policy Framework for Go*
 
 
@@ -11,15 +9,15 @@ Usage
 
 Get GoSPF and run all unit test:
 
-    $ go get github.com/gopistolet/gospf
-    $ cd $GOPATH/src/github.com/gopistolet/gospf
+    $ go get github.com/mistralmail/gospf
+    $ cd $GOPATH/src/github.com/mistralmail/gospf
     $ go test ./...
 
 ### Command line tool
 
 Compile the code:
 
-    $ go build -o spf github.com/gopistolet/gospf/gospf
+    $ go build -o spf github.com/mistralmail/gospf/gospf
 
 You can run GoSPF in the console to validate an IP address against a domain: `./spf domain ip ["debug"]`. e.g.:
 
@@ -43,8 +41,8 @@ package main
 
 import (
     "fmt"
-    "github.com/gopistolet/gospf"
-    "github.com/gopistolet/gospf/dns"
+    "github.com/mistralmail/gospf"
+    "github.com/mistralmail/gospf/dns"
 )
 
 func main() {
@@ -96,7 +94,7 @@ Macros aren't supported (yet).
 License
 -------
 
-GoSPF is licensed under the [BSD 2-clause “Simplified” License](https://github.com/gopistolet/gospf/blob/master/LICENSE.txt).
+GoSPF is licensed under the [BSD 2-clause “Simplified” License](https://github.com/mistralmail/gospf/blob/master/LICENSE.txt).
 
 
 Author

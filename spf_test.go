@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/gopistolet/gospf/dns"
+	"github.com/mistralmail/gospf/dns"
 )
 
 func TestHandleIPNets(t *testing.T) {
