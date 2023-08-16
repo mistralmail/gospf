@@ -5,8 +5,8 @@ import (
 	_ "net"
 	"os"
 
-	"github.com/gopistolet/gospf"
-	"github.com/gopistolet/gospf/dns"
+	"github.com/mistralmail/gospf"
+	"github.com/mistralmail/gospf/dns"
 )
 
 func main() {
